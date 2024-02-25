@@ -3,7 +3,7 @@ project( khlobustova )
 
 set(OPENCV_DIR C:/Users/Svt/Desktop/khlobustova/opencv/build/install)
 
-add_executable(${PROJECT_NAME} prj.lab/lab1.cpp)
+add_executable(${PROJECT_NAME} prj.lab/lab01/lab01.cpp)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${OPENCV_DIR}/include)
 
