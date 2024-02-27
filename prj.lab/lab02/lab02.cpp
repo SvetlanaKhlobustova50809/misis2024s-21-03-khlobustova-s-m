@@ -22,7 +22,6 @@ Mat drawHistogram(const Mat& image) {
     calcHist(&image, 1, 0, Mat(), hist, 1, &histSize, &histRange);
     normalize(hist, hist, 0, histImage.rows, NORM_MINMAX, -1, Mat());
 
-    // Рисование столбиков гистограммы
     for (int i = 0; i < histSize; i++) {
         rectangle(histImage, Point(i, histImage.rows), Point(i + 1, histImage.rows - cvRound(hist.at<float>(i))), Scalar(0), 1);
     }
@@ -39,7 +38,6 @@ Mat addNoise(const Mat& image, double stddev) {
 }
 
 int main() {
-    // Параметры тестовых изображений
     int side = 256;
     int innerSquareSide = 209;
     int circleRadius = 83;
@@ -48,25 +46,20 @@ int main() {
     vector<int> brightnessLevels3 = { 55, 127, 200 };
     vector<int> brightnessLevels4 = { 90, 127, 165 };
 
-    // Генерация тестовых изображений
     Mat testImage1 = generateTestImage(side, innerSquareSide, circleRadius, brightnessLevels1);
     Mat testImage2 = generateTestImage(side, innerSquareSide, circleRadius, brightnessLevels2);
     Mat testImage3 = generateTestImage(side, innerSquareSide, circleRadius, brightnessLevels3);
     Mat testImage4 = generateTestImage(side, innerSquareSide, circleRadius, brightnessLevels4);
 
-    // Создание окна для вывода результатов
     Mat combinedImages;
 
-    // Склейка исходных изображений
     Mat combinedTop;
     hconcat(testImage1, testImage2, combinedTop);
     hconcat(combinedTop, testImage3, combinedTop);
     hconcat(combinedTop, testImage4, combinedTop);
 
-    // Значения среднеквадратичного отклонения для шума
     vector<double> stddevValues = { 3.0, 7.0, 15.0 };
 
-    // Генерация зашумленных изображений и их гистограмм
     vector<Mat> noisyTestImages(4);
     vector<Mat> histImages(4);
     Mat combinedBottom;
@@ -91,8 +84,6 @@ int main() {
         histImages[1] = (histImage2);
         histImages[2] = (histImage3);
         histImages[3] = (histImage4);
-
-        // Склейка зашумленных изображений и их гистограмм
         
         hconcat(noisyTestImages[0], noisyTestImages[1], combinedBottom);
         hconcat(combinedBottom, noisyTestImages[2], combinedBottom);
@@ -105,7 +96,6 @@ int main() {
         hconcat(combinedHistograms, histImages[2], combinedHistograms);
         hconcat(combinedHistograms, histImages[3], combinedHistograms);
 
-        // Склейка исходных изображений и зашумленных с гистограммами
         vconcat(combinedTop, combinedBottom, combinedImages);
         vconcat(combinedImages, combinedHistograms, combinedImages);
 
