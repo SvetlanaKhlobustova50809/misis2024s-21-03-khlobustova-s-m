@@ -4,6 +4,9 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/core/core.hpp>
 
+using namespace cv;
+using namespace std;
+
 cv::Mat generateTestImage(int numObjects, cv::Range sizeRange, cv::Range contrastRange, int blurSize) {
     cv::Mat image(550, 550, CV_8UC3, cv::Scalar(0, 0, 0));
 
@@ -77,7 +80,7 @@ void tuneBinaryParameters(cv::Mat inputImage) {
         cv::imshow("Binary Image", binaryImage);
         cv::imshow("Adaptive Thresholded Image", adaptive);
 
-        char key = cv::waitKey(10);
+        char key = cvWaitKey(0);
         if (key == 27) // Нажатие ESC для выхода
             break;
     }
@@ -94,10 +97,8 @@ cv::Mat nonMaximumSuppression(cv::Mat gradientMagnitude, cv::Mat gradientDirecti
 
     for (int y = 1; y < gradientMagnitude.rows - 1; ++y) {
         for (int x = 1; x < gradientMagnitude.cols - 1; ++x) {
-            // Определяем направление градиента в текущем пикселе
             float direction = gradientDirection.at<float>(y, x);
 
-            // Определяем соседние пиксели в направлении градиента
             float neighbor1, neighbor2;
             if (direction < 0) {
                 neighbor1 = gradientMagnitude.at<float>(y + 1, x);
@@ -116,7 +117,6 @@ cv::Mat nonMaximumSuppression(cv::Mat gradientMagnitude, cv::Mat gradientDirecti
                 neighbor2 = gradientMagnitude.at<float>(y + 1, x - 1);
             }
 
-            // Если текущий пиксель является локальным максимумом, сохраняем его значение
             if (gradientMagnitude.at<float>(y, x) >= neighbor1 && gradientMagnitude.at<float>(y, x) >= neighbor2) {
                 nonMaxSuppressed.at<uchar>(y, x) = 255;
             }
@@ -127,25 +127,20 @@ cv::Mat nonMaximumSuppression(cv::Mat gradientMagnitude, cv::Mat gradientDirecti
 }
 
 cv::Mat detectObjects(cv::Mat inputImage, int kernelSize, double lowThreshold, double highThreshold) {
-    // Сглаживание
     cv::Mat blurredImage;
     cv::GaussianBlur(inputImage, blurredImage, cv::Size(kernelSize, kernelSize), 0);
 
-    // Поиск градиентов
     cv::Mat grayscaleImage, gradientsX, gradientsY, gradientMagnitude, gradientDirection;
     cv::cvtColor(blurredImage, grayscaleImage, cv::COLOR_BGR2GRAY);
     cv::Sobel(grayscaleImage, gradientsX, CV_32F, 1, 0);
     cv::Sobel(grayscaleImage, gradientsY, CV_32F, 0, 1);
     cv::cartToPolar(gradientsX, gradientsY, gradientMagnitude, gradientDirection, true);
 
-    // Подавление немаксимумов
     cv::Mat nonMaxSuppressed = nonMaximumSuppression(gradientMagnitude, gradientDirection);
 
-    // Двойная пороговая фильтрация
     cv::Mat thresholded;
     cv::Canny(nonMaxSuppressed, thresholded, lowThreshold, highThreshold);
 
-    // Трассировка областей неоднозначности
     cv::Mat tracedEdges;
     cv::Canny(inputImage, tracedEdges, lowThreshold, highThreshold);
 
@@ -158,71 +153,59 @@ struct Circle {
     int x, y, r;
 };
 
-float calculateIoU(cv::Rect box1, cv::Rect box2) {
-    // Вычисляем пересечение
-    cv::Rect intersection = box1 & box2;
-
-    // Вычисляем объединение
-    cv::Rect unionRect = box1 | box2;
-
-    // Вычисляем площади
+float calculateIoU(Rect box1, Rect box2) {
+    Rect intersection = box1 & box2;
+    Rect unionRect = box1 | box2;
     float intersectionArea = intersection.area();
     float unionArea = unionRect.area();
-
-    // Вычисляем метрику IoU
-    float iou = intersectionArea / unionArea;
-
-    return iou;
+    return intersectionArea / unionArea;
 }
 
-void evaluateDetection(const std::vector<Circle>& groundTruth, const std::vector<Circle>& detected, float threshold, int& TP, int& FP, int& FN) {
-    // Проходим по каждому истинному кружку
+void evaluateDetection(const vector<Circle>& groundTruth, const vector<Circle>& detected, float threshold, int& TP, int& FP, int& FN) {
+    TP = 0;
+    FN = 0;
+    vector<bool> detectedMatched(detected.size(), false);
+
     for (const auto& gt : groundTruth) {
-        bool detectedMatch = false;
-        // Проходим по каждому обнаруженному кружку
-        for (const auto& dt : detected) {
-            // Преобразуем координаты кружков в прямоугольники для вычисления IoU
-            cv::Rect gtRect(gt.x - gt.r, gt.y - gt.r, 2 * gt.r, 2 * gt.r);
-            cv::Rect dtRect(dt.x - dt.r, dt.y - dt.r, 2 * dt.r, 2 * dt.r);
+        bool matchFound = false;
+        for (size_t i = 0; i < detected.size(); ++i) {
+            if (!detectedMatched[i]) {
+                Rect gtRect(gt.x - gt.r, gt.y - gt.r, 2 * gt.r, 2 * gt.r);
+                Rect dtRect(detected[i].x - detected[i].r, detected[i].y - detected[i].r, 2 * detected[i].r, 2 * detected[i].r);
 
-            // Вычисляем метрику IoU для данной пары кружков
-            float iou = calculateIoU(gtRect, dtRect);
+                float iou = calculateIoU(gtRect, dtRect);
 
-            // Если метрика IoU больше заданного порога, считаем, что объект обнаружен верно
-            if (iou > threshold) {
-                detectedMatch = true;
-                TP++;  // Истинно положительное срабатывание
-                break;
+                if (iou > threshold) {
+                    matchFound = true;
+                    detectedMatched[i] = true;
+                    break;
+                }
             }
         }
-        // Если кружок не был обнаружен, считаем его ложным отрицанием
-        if (!detectedMatch) {
-            FN++;  // Ложное отрицание
+        if (matchFound) {
+            TP++;
+        }
+        else {
+            FN++;
         }
     }
 
-    // Ложные положительные срабатывания
     FP = detected.size() - TP;
 }
 
 void fillGroundTruthAndDetected(cv::Mat testImage, std::vector<Circle>& groundTruth, std::vector<Circle>& detected) {
-    // Детектируем объекты на тестовом изображении
     cv::Mat detectedObjects = detectObjects(testImage, 5, 50, 150);
 
-    // Для примера просто добавим несколько обнаруженных кружков в вектор detected
-    // Замените этот код реальной детекцией объектов
     for (int i = 0; i < 5; ++i) {
         Circle circle;
         circle.x = rand() % testImage.cols;
         circle.y = rand() % testImage.rows;
-        circle.r = rand() % 30 + 10; // Радиус от 10 до 40
+        circle.r = rand() % 30 + 10;
 
-        detected.push_back(circle); // Добавляем кружок в вектор обнаруженных кружков
+        detected.push_back(circle); 
     }
 
-    // Заполняем вектор groundTruth на основе сгенерированного изображения
     for (const auto& gt : groundTruth) {
-        // Добавляем истинный кружок в вектор groundTruth
         detected.push_back(gt);
     }
 }
@@ -240,13 +223,11 @@ int main(int argc, const char* argv[]) {
     cv::imshow("Detected Objects", detectedObjects);
 
     cv::imshow("Test Image", testImage);
-    //cv::imshow("Thresholded Image", thresholded);
-    //cv::imshow("Adaptive Thresholded Image", adaptive);
     cv::imshow("Otsu Thresholded Image", otsu);
 
     tuneBinaryParameters(testImage);
 
-    cv::waitKey(10000);
+    cvWaitKey(10000);
 
 
     float qualityThreshold = 0.5;
@@ -267,4 +248,5 @@ int main(int argc, const char* argv[]) {
     float averageIoU = static_cast<float>(TP) / (TP + FN + FP);
     std::cout << "Average IoU: " << averageIoU << std::endl;
 
+    return 0;
 }
