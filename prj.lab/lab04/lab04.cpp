@@ -194,11 +194,11 @@ void evaluateDetection(const vector<Circle>& groundTruth, const vector<Circle>& 
         }
     }
 
-    FP = detected.size() - TP;
+    FP = std::count(detectedMatched.begin(), detectedMatched.end(), false);
 }
 
 void fillGroundTruthAndDetected(cv::Mat testImage, std::vector<Circle>& groundTruth, std::vector<Circle>& detected) {
-    int numCircles = 5;
+    int numCircles = 10;
     for (int i = 0; i < numCircles; ++i) {
         Circle circle;
         circle.x = rand() % testImage.cols;
@@ -210,8 +210,16 @@ void fillGroundTruthAndDetected(cv::Mat testImage, std::vector<Circle>& groundTr
     for (const auto& gt : groundTruth) {
         detected.push_back(gt);
     }
-}
 
+    int numFalseDetections = 5;
+    for (int i = 0; i < numFalseDetections; ++i) {
+        Circle falseDetection;
+        falseDetection.x = rand() % testImage.cols;
+        falseDetection.y = rand() % testImage.rows;
+        falseDetection.r = rand() % 30 + 10;
+        detected.push_back(falseDetection);
+    }
+}
 
 
 int main(int argc, const char* argv[]) {
