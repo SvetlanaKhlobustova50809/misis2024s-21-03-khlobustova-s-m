@@ -45,12 +45,10 @@ Mat autoContrastSingleChannel(Mat img) {
     return result;
 }
 
-// Функция для автоконтрастирования цветного изображения
 Mat autoContrastColor(Mat img) {
     vector<Mat> channels;
     split(img, channels);
 
-    // Применение автоконтрастирования для каждого канала
     for (int i = 0; i < channels.size(); i++) {
         channels[i] = autoContrastSingleChannel(channels[i]);
     }
@@ -61,13 +59,11 @@ Mat autoContrastColor(Mat img) {
 }
 
 void showHistogram(Mat& img) {
-    // Разделение изображения на каналы
     vector<Mat> bgr_planes;
     split(img, bgr_planes);
 
-    // Создание гистограмм
     int histSize = 256;
-    float range[] = { 0, 256 }; // диапазон значений
+    float range[] = { 0, 256 };
     const float* histRange = { range };
     bool uniform = true, accumulate = false;
     Mat b_hist, g_hist, r_hist;
@@ -76,17 +72,14 @@ void showHistogram(Mat& img) {
     calcHist(&bgr_planes[1], 1, 0, Mat(), g_hist, 1, &histSize, &histRange, uniform, accumulate);
     calcHist(&bgr_planes[2], 1, 0, Mat(), r_hist, 1, &histSize, &histRange, uniform, accumulate);
 
-    // Рисование гистограмм
     int hist_w = 512, hist_h = 400;
     int bin_w = cvRound((double)hist_w / histSize);
     Mat histImage(hist_h, hist_w, CV_8UC3, Scalar(0, 0, 0));
 
-    // Нормализация результатов до диапазона [0, histImage.rows]
     normalize(b_hist, b_hist, 0, histImage.rows, NORM_MINMAX, -1, Mat());
     normalize(g_hist, g_hist, 0, histImage.rows, NORM_MINMAX, -1, Mat());
     normalize(r_hist, r_hist, 0, histImage.rows, NORM_MINMAX, -1, Mat());
 
-    // Рисование для каждого канала
     for (int i = 1; i < histSize; i++) {
         line(histImage, Point(bin_w * (i - 1), hist_h - cvRound(b_hist.at<float>(i - 1))),
             Point(bin_w * (i), hist_h - cvRound(b_hist.at<float>(i))),
@@ -99,7 +92,6 @@ void showHistogram(Mat& img) {
             Scalar(0, 0, 255), 2, LINE_AA);
     }
 
-    // Отображение гистограммы
     imshow("Histogram", histImage);
     waitKey(10000);
 }
