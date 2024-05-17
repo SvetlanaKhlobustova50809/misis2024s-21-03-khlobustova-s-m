@@ -1,4 +1,8 @@
 #include <opencv2/opencv.hpp>
+#include <opencv2/highgui/highgui_c.h>
+#include <opencv2/highgui.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/core/core.hpp>
 
 cv::Mat generateTestImage(int numObjects, cv::Range sizeRange, cv::Range contrastRange, int blurSize) {
     cv::Mat image(550, 550, CV_8UC3, cv::Scalar(0, 0, 0));
@@ -54,16 +58,16 @@ void tuneBinaryParameters(cv::Mat inputImage) {
 
     cv::Mat binaryImage, adaptive;
 
-    cv::namedWindow("Binary Parameters", cv::WINDOW_GUI_NORMAL);
-    cv::createTrackbar("Threshold Value", "Binary Parameters", &thresholdValue, 255);
-    cv::createTrackbar("adaptive1 Value", "Binary Parameters", &adaptive1, 51, [](int value, void* userdata) {
+    cvNamedWindow("Binary Parameters", cv::WINDOW_GUI_NORMAL);
+    cvCreateTrackbar("Threshold Value", "Binary Parameters", &thresholdValue, 255);
+    cvCreateTrackbar("adaptive1 Value", "Binary Parameters", &adaptive1, 51, [](int value) {
         if (value % 2 == 0) {
-            cv::setTrackbarPos("adaptive1 Value", "Binary Parameters", value + 1);
+            cvSetTrackbarPos("adaptive1 Value", "Binary Parameters", value + 1);
         }
-        }, nullptr);
-    cv::setTrackbarMin("adaptive1 Value", "Binary Parameters", 3);
+        });
+    cvSetTrackbarMin("adaptive1 Value", "Binary Parameters", 3);
 
-    cv::createTrackbar("adaptive2 Value", "Binary Parameters", &adaptive2, 10);
+    cvCreateTrackbar("adaptive2 Value", "Binary Parameters", &adaptive2, 10);
     /*cv::createTrackbar("Block Size", "Binary Parameters", &blockSize, 255);
     cv::createTrackbar("C", "Binary Parameters", (int*)&C, 255);*/
 
@@ -227,7 +231,7 @@ void fillGroundTruthAndDetected(cv::Mat testImage, std::vector<Circle>& groundTr
 int main(int argc, const char* argv[]) {
     cv::Mat testImage = generateTestImage(100, cv::Range(3, 7), cv::Range(25, 5), 15);
 
-    
+
     cv::Mat thresholded = thresholdBinary(testImage, 100);
     cv::Mat adaptive = adaptiveBinary(testImage, 21, 10);
     cv::Mat otsu = otsuBinary(testImage);
@@ -242,7 +246,7 @@ int main(int argc, const char* argv[]) {
 
     tuneBinaryParameters(testImage);
 
-    cv::waitKey(0);
+    cv::waitKey(10000);
 
 
     float qualityThreshold = 0.5;
