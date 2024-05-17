@@ -80,7 +80,7 @@ void tuneBinaryParameters(cv::Mat inputImage) {
         cv::imshow("Binary Image", binaryImage);
         cv::imshow("Adaptive Thresholded Image", adaptive);
 
-        char key = cvWaitKey(0);
+        char key = cv::waitKey(10);
         if (key == 27) // Нажатие ESC для выхода
             break;
     }
@@ -97,8 +97,10 @@ cv::Mat nonMaximumSuppression(cv::Mat gradientMagnitude, cv::Mat gradientDirecti
 
     for (int y = 1; y < gradientMagnitude.rows - 1; ++y) {
         for (int x = 1; x < gradientMagnitude.cols - 1; ++x) {
+            // Определяем направление градиента в текущем пикселе
             float direction = gradientDirection.at<float>(y, x);
 
+            // Определяем соседние пиксели в направлении градиента
             float neighbor1, neighbor2;
             if (direction < 0) {
                 neighbor1 = gradientMagnitude.at<float>(y + 1, x);
@@ -117,6 +119,7 @@ cv::Mat nonMaximumSuppression(cv::Mat gradientMagnitude, cv::Mat gradientDirecti
                 neighbor2 = gradientMagnitude.at<float>(y + 1, x - 1);
             }
 
+            // Если текущий пиксель является локальным максимумом, сохраняем его значение
             if (gradientMagnitude.at<float>(y, x) >= neighbor1 && gradientMagnitude.at<float>(y, x) >= neighbor2) {
                 nonMaxSuppressed.at<uchar>(y, x) = 255;
             }
@@ -127,20 +130,25 @@ cv::Mat nonMaximumSuppression(cv::Mat gradientMagnitude, cv::Mat gradientDirecti
 }
 
 cv::Mat detectObjects(cv::Mat inputImage, int kernelSize, double lowThreshold, double highThreshold) {
+    // Сглаживание
     cv::Mat blurredImage;
     cv::GaussianBlur(inputImage, blurredImage, cv::Size(kernelSize, kernelSize), 0);
 
+    // Поиск градиентов
     cv::Mat grayscaleImage, gradientsX, gradientsY, gradientMagnitude, gradientDirection;
     cv::cvtColor(blurredImage, grayscaleImage, cv::COLOR_BGR2GRAY);
     cv::Sobel(grayscaleImage, gradientsX, CV_32F, 1, 0);
     cv::Sobel(grayscaleImage, gradientsY, CV_32F, 0, 1);
     cv::cartToPolar(gradientsX, gradientsY, gradientMagnitude, gradientDirection, true);
 
+    // Подавление немаксимумов
     cv::Mat nonMaxSuppressed = nonMaximumSuppression(gradientMagnitude, gradientDirection);
 
+    // Двойная пороговая фильтрация
     cv::Mat thresholded;
     cv::Canny(nonMaxSuppressed, thresholded, lowThreshold, highThreshold);
 
+    // Трассировка областей неоднозначности
     cv::Mat tracedEdges;
     cv::Canny(inputImage, tracedEdges, lowThreshold, highThreshold);
 
@@ -153,12 +161,21 @@ struct Circle {
     int x, y, r;
 };
 
-float calculateIoU(Rect box1, Rect box2) {
-    Rect intersection = box1 & box2;
-    Rect unionRect = box1 | box2;
+float calculateIoU(cv::Rect box1, cv::Rect box2) {
+    // Вычисляем пересечение
+    cv::Rect intersection = box1 & box2;
+
+    // Вычисляем объединение
+    cv::Rect unionRect = box1 | box2;
+
+    // Вычисляем площади
     float intersectionArea = intersection.area();
     float unionArea = unionRect.area();
-    return intersectionArea / unionArea;
+
+    // Вычисляем метрику IoU
+    float iou = intersectionArea / unionArea;
+
+    return iou;
 }
 
 void evaluateDetection(const vector<Circle>& groundTruth, const vector<Circle>& detected, float threshold, int& TP, int& FP, int& FN) {
@@ -194,21 +211,22 @@ void evaluateDetection(const vector<Circle>& groundTruth, const vector<Circle>& 
 }
 
 void fillGroundTruthAndDetected(cv::Mat testImage, std::vector<Circle>& groundTruth, std::vector<Circle>& detected) {
-    cv::Mat detectedObjects = detectObjects(testImage, 5, 50, 150);
-
-    for (int i = 0; i < 5; ++i) {
+    // Генерация groundTruth
+    int numCircles = 5;
+    for (int i = 0; i < numCircles; ++i) {
         Circle circle;
         circle.x = rand() % testImage.cols;
         circle.y = rand() % testImage.rows;
         circle.r = rand() % 30 + 10;
-
-        detected.push_back(circle); 
+        groundTruth.push_back(circle);
     }
 
+    // Добавление groundTruth объектов в detected для примера
     for (const auto& gt : groundTruth) {
         detected.push_back(gt);
     }
 }
+
 
 
 int main(int argc, const char* argv[]) {
@@ -223,11 +241,13 @@ int main(int argc, const char* argv[]) {
     cv::imshow("Detected Objects", detectedObjects);
 
     cv::imshow("Test Image", testImage);
+    //cv::imshow("Thresholded Image", thresholded);
+    //cv::imshow("Adaptive Thresholded Image", adaptive);
     cv::imshow("Otsu Thresholded Image", otsu);
 
     tuneBinaryParameters(testImage);
 
-    cvWaitKey(10000);
+    cv::waitKey(10000);
 
 
     float qualityThreshold = 0.5;
@@ -248,5 +268,4 @@ int main(int argc, const char* argv[]) {
     float averageIoU = static_cast<float>(TP) / (TP + FN + FP);
     std::cout << "Average IoU: " << averageIoU << std::endl;
 
-    return 0;
 }
