@@ -6,7 +6,6 @@
 using namespace cv;
 using namespace std;
 
-// Функция для генерации изображения круга на фоне квадрата
 Mat generateTestImage(int side, int circleRadius, Scalar bgColor, Scalar circleColor) {
     Mat testImage(side, side, CV_8UC1, bgColor);
     circle(testImage, Point(side / 2, side / 2), circleRadius, circleColor, -1);
