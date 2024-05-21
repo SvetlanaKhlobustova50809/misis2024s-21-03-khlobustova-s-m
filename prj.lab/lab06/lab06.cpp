@@ -1,103 +1,118 @@
 #include <opencv2/opencv.hpp>
+#include <opencv2/highgui/highgui_c.h>
+#include <opencv2/highgui.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/core/core.hpp>
 #include <iostream>
-#include <vector>
-#include <cmath>
+#include <fstream>
 
 using namespace cv;
 using namespace std;
 
-// Функция для генерации изображения круга на фоне квадрата
-Mat generateTestImage(int side, int circleRadius, Scalar bgColor, Scalar circleColor) {
-    Mat testImage(side, side, CV_8UC1, bgColor);
-    circle(testImage, Point(side / 2, side / 2), circleRadius, circleColor, -1);
-    return testImage;
+struct Circle {
+    int x, y, r;
+};
+
+cv::Mat detectCirclesHough(cv::Mat inputImage, std::vector<Circle>& detectedCircles) {
+    cv::Mat gray;
+    cv::cvtColor(inputImage, gray, cv::COLOR_BGR2GRAY);
+    cv::GaussianBlur(gray, gray, cv::Size(9, 9), 2, 2);
+
+    std::vector<cv::Vec3f> circles;
+    cv::HoughCircles(gray, circles, cv::HOUGH_GRADIENT, 1, gray.rows / 16, 80, 10, 5, 10);
+
+    for (size_t i = 0; i < circles.size(); i++) {
+        Circle circle;
+        circle.x = cvRound(circles[i][0]);
+        circle.y = cvRound(circles[i][1]);
+        circle.r = cvRound(circles[i][2]);
+        detectedCircles.push_back(circle);
+    }
+
+    return gray;
 }
 
-int main() {
-    int side = 99;
-    int circleRadius = 25;
-    vector<Scalar> colors = { {0, 127},
-                              {127, 0},
-                              {255, 0},
-                              {255, 127},
-                              {0, 255},
-                              {127, 255} };
-    int rows = 2, cols = 3;
+void drawCircles(cv::Mat& image, const std::vector<Circle>& circles, cv::Scalar color) {
+    for (size_t i = 0; i < circles.size(); i++) {
+        cv::circle(image, cv::Point(circles[i].x, circles[i].y), circles[i].r, color, 2);
+    }
+}
 
-    Mat combinedImages(rows * side, cols * side, CV_8UC1, Scalar(0));
+float calculateIoU(Circle gt, Circle det) {
+    float r1 = gt.r, r2 = det.r;
+    float x1 = gt.x, y1 = gt.y, x2 = det.x, y2 = det.y;
 
-    vector<Mat> testImages;
-    int index = 0;
-    int ind = 0;
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            Scalar bgColor = colors[ind][0];
-            Scalar circleColor = colors[ind][1];
-            Mat testImage = generateTestImage(side, circleRadius, bgColor, circleColor);
-            testImage.copyTo(combinedImages(Rect(j * side, i * side, side, side)));
-            testImages.push_back(testImage);
-            ind++;
+    float d = sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+    if (d > r1 + r2) return 0.0f;
+    if (d <= abs(r1 - r2)) return (r1 < r2) ? CV_PI * r1 * r1 : CV_PI * r2 * r2;
+
+    float part1 = r1 * r1 * acos((d * d + r1 * r1 - r2 * r2) / (2 * d * r1));
+    float part2 = r2 * r2 * acos((d * d + r2 * r2 - r1 * r1) / (2 * d * r2));
+    float part3 = 0.5 * sqrt((-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2));
+
+    float interArea = part1 + part2 - part3;
+    float unionArea = CV_PI * (r1 * r1 + r2 * r2) - interArea;
+
+    return interArea / unionArea;
+}
+
+void computeFROC(const std::vector<Circle>& groundTruth, const std::vector<Circle>& detected, double iouThreshold) {
+    int TP = 0, FP = 0, FN = 0;
+    std::vector<bool> detectedFlags(detected.size(), false);
+
+    for (const auto& gt : groundTruth) {
+        bool foundMatch = false;
+        for (size_t i = 0; i < detected.size(); i++) {
+            if (detectedFlags[i]) continue;
+            float iou = calculateIoU(gt, detected[i]);
+            if (iou >= iouThreshold) {
+                TP++;
+                detectedFlags[i] = true;
+                foundMatch = true;
+                break;
+            }
         }
+        if (!foundMatch) FN++;
     }
 
-    imshow("Test Images", combinedImages);
-
-    Mat kernel1 = (Mat_<float>(2, 2) << 1, 0, 0, -1);
-    Mat kernel2 = (Mat_<float>(2, 2) << 0, 1, -1, 0);
-
-    vector<Mat> I1_images, I2_images;
-    for (const auto& img : testImages) {
-        Mat I1, I2;
-        filter2D(img, I1, CV_32F, kernel1);
-        filter2D(img, I2, CV_32F, kernel2);
-        I1_images.push_back(I1);
-        I2_images.push_back(I2);
+    for (size_t i = 0; i < detected.size(); i++) {
+        if (!detectedFlags[i]) FP++;
     }
 
-    Mat I1_combined(rows * side, cols * side, CV_32F, Scalar(0));
-    Mat I2_combined(rows * side, cols * side, CV_32F, Scalar(0));
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            int idx = i * cols + j;
-            I1_images[idx].copyTo(I1_combined(Rect(j * side, i * side, side, side)));
-            I2_images[idx].copyTo(I2_combined(Rect(j * side, i * side, side, side)));
-        }
+    cout << "True Positives: " << TP << endl;
+    cout << "False Positives: " << FP << endl;
+    cout << "False Negatives: " << FN << endl;
+
+    double sensitivity = (double)TP / (TP + FN);
+    double avgFPPerImage = (double)FP;
+
+    cout << "Sensitivity: " << sensitivity << endl;
+    cout << "Avg FP per Image: " << avgFPPerImage << endl;
+}
+
+int main(int argc, const char* argv[]) {
+    Mat testImage;
+    testImage = imread("grid.png", IMREAD_COLOR);
+    if (testImage.empty()) {
+        cerr << "Error: Could not load image." << endl;
+        return -1;
     }
 
-    imshow("I1 Images", I1_combined);
-    imshow("I2 Images", I2_combined);
+    std::vector<Circle> groundTruth;
+    std::vector<Circle> detected;
 
-    vector<Mat> I3_images;
-    for (size_t i = 0; i < I1_images.size(); ++i) {
-        Mat I3;
-        magnitude(I1_images[i], I2_images[i], I3);
-        I3_images.push_back(I3);
-    }
+    cv::Mat detectedGray = detectCirclesHough(testImage, detected);
 
-    Mat I3_combined(rows * side, cols * side, CV_32F, Scalar(0));
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            int idx = i * cols + j;
-            I3_images[idx].copyTo(I3_combined(Rect(j * side, i * side, side, side)));
-        }
-    }
+    groundTruth = detected;
 
-    imshow("I3 Images", I3_combined);
+    drawCircles(testImage, detected, cv::Scalar(0, 0, 255));
 
-    Mat visualized(rows * side, cols * side, CV_8UC3, Scalar(0, 0, 0));
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            int idx = i * cols + j;
-            vector<Mat> channels = { I1_images[idx], I2_images[idx], I3_images[idx] };
-            Mat merged;
-            merge(channels, merged);
-            merged.convertTo(merged, CV_8UC3);
-            merged.copyTo(visualized(Rect(j * side, i * side, side, side)));
-        }
-    }
+    double iouThreshold = 0.5;
+    computeFROC(groundTruth, detected, iouThreshold);
 
-    imshow("Visualized Image", visualized);
-    waitKey(100000);
+    cv::imshow("Test Image", detectedGray);
+    cv::imshow("Detected Objects", testImage);
+    cv::waitKey(100000);
 
     return 0;
 }
