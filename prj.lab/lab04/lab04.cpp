@@ -69,10 +69,7 @@ void tuneBinaryParameters(cv::Mat inputImage) {
         }
         });
     cvSetTrackbarMin("adaptive1 Value", "Binary Parameters", 3);
-
     cvCreateTrackbar("adaptive2 Value", "Binary Parameters", &adaptive2, 10);
-    /*cv::createTrackbar("Block Size", "Binary Parameters", &blockSize, 255);
-    cv::createTrackbar("C", "Binary Parameters", (int*)&C, 255);*/
 
     while (true) {
         binaryImage = thresholdBinary(inputImage, thresholdValue);
@@ -147,8 +144,6 @@ cv::Mat detectObjects(cv::Mat inputImage, int kernelSize, double lowThreshold, d
     return tracedEdges;
 }
 
-
-
 struct Circle {
     int x, y, r;
 };
@@ -222,8 +217,19 @@ void fillGroundTruthAndDetected(cv::Mat testImage, std::vector<Circle>& groundTr
 }
 
 
+void drawCircles(cv::Mat& image, const std::vector<Circle>& circles, cv::Scalar color) {
+    for (size_t i = 0; i < circles.size(); i++) {
+        cv::circle(image, cv::Point(circles[i].x, circles[i].y), circles[i].r, color, 2);
+    }
+}
+
+
 int main(int argc, const char* argv[]) {
     cv::Mat testImage = generateTestImage(100, cv::Range(3, 7), cv::Range(25, 5), 15);
+
+    string outputFileName = "C:/Users/Svt/Desktop/khlobustova/prj.lab/lab04/test_image.png";
+    imwrite(outputFileName, testImage);
+
 
 
     cv::Mat thresholded = thresholdBinary(testImage, 100);
@@ -231,16 +237,9 @@ int main(int argc, const char* argv[]) {
     cv::Mat otsu = otsuBinary(testImage);
 
     cv::Mat detectedObjects = detectObjects(testImage, 5, 50, 150);
-    cv::imshow("Detected Objects", detectedObjects);
-
-    cv::imshow("Test Image", testImage);
-    //cv::imshow("Thresholded Image", thresholded);
-    //cv::imshow("Adaptive Thresholded Image", adaptive);
     cv::imshow("Otsu Thresholded Image", otsu);
 
     tuneBinaryParameters(testImage);
-
-    cv::waitKey(10000);
 
 
     float qualityThreshold = 0.5;
@@ -253,6 +252,11 @@ int main(int argc, const char* argv[]) {
     int TP = 0, FP = 0, FN = 0;
 
     evaluateDetection(groundTruth, detected, qualityThreshold, TP, FP, FN);
+    drawCircles(testImage, detected, cv::Scalar(0, 0, 255));
+    cv::imshow("Test Image", testImage);
+
+    cv::waitKey(100000);
+
 
     std::cout << "True Positives (TP): " << TP << std::endl;
     std::cout << "False Positives (FP): " << FP << std::endl;
