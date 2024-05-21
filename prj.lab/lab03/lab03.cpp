@@ -18,7 +18,7 @@ Mat autoContrastSingleChannel(Mat img) {
 
     calcHist(&img, 1, 0, Mat(), hist, 1, &histSize, &histRange, uniform, accumulate);
 
-    float alpha = 0.1, beta = 0.1;
+    float alpha = 0.15, beta = 0.0001;
     float sum = 0;
     int totalPixels = img.rows * img.cols;
     int blackThreshold = 0, whiteThreshold = 255;
@@ -93,11 +93,10 @@ void showHistogram(Mat& img) {
     }
 
     imshow("Histogram", histImage);
-    waitKey(10000);
 }
 
 int main(int argc, char* argv[]) {
-    Mat img = imread("C:/Users/Svt/Desktop/khlobustova/prj.lab/pictures/test_image2.jpg");
+    Mat img = imread("C:/Users/Svt/Desktop/khlobustova/prj.lab/pictures/test_image.jpg");
 
 
     if (img.empty()) {
@@ -118,4 +117,5 @@ int main(int argc, char* argv[]) {
     imshow("Original Image", img);
     imshow("Auto-Contrast Image", result);
     waitKey(10000);
+
 }
