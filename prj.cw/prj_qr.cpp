@@ -323,7 +323,7 @@ void calculateQualityMetrics(const vector<string>& src, const vector<string>& la
 
 
 int main(int argc, char* argv[]){
-	string base = "..";
+	string base = ".";
 	string test, src, layout, src_data, layout_data;
 	test = "/input/test2.png";
 	src = "/output/src2.png";
