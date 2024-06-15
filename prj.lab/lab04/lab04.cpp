@@ -3,9 +3,22 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/core/core.hpp>
+#include<iostream>
+#include<opencv2/core.hpp>
+#include<opencv2/imgproc.hpp>
+#include <opencv2/objdetect.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
 using namespace cv;
 using namespace std;
+
+struct Circle {
+    int x, y, r;
+};
+
+cv::Mat testImage;
+std::vector<Circle> groundTruth;
 
 cv::Mat generateTestImage(int numObjects, cv::Range sizeRange, cv::Range contrastRange, int blurSize) {
     cv::Mat image(550, 550, CV_8UC3, cv::Scalar(0, 0, 0));
@@ -30,13 +43,20 @@ cv::Mat generateTestImage(int numObjects, cv::Range sizeRange, cv::Range contras
                 circle.setTo(cv::Scalar(255, 255, 255), circleMask);
                 circle.convertTo(circle, -1, contrast / 30.0);
                 circle.copyTo(image, circleMask);
+                groundTruth.push_back({ (j + 1) * 50, (i + 1) * 50, static_cast<int>(size) });
             }
         }
     }
 
+    cv::threshold(image, image, 20, 100, cv::THRESH_BINARY);
     cv::GaussianBlur(image, image, cv::Size(blurSize, blurSize), 0);
 
-    return image;
+
+    Mat noisyImage = image.clone();
+    RNG rng;
+    rng.fill(noisyImage, RNG::NORMAL, 15 * 3, 15);
+  
+    return image + noisyImage;
 }
 
 cv::Mat thresholdBinary(cv::Mat inputImage, int thresholdValue) {
@@ -89,64 +109,6 @@ cv::Mat otsuBinary(cv::Mat inputImage) {
     cv::threshold(binaryImage, binaryImage, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
     return binaryImage;
 }
-cv::Mat nonMaximumSuppression(cv::Mat gradientMagnitude, cv::Mat gradientDirection) {
-    cv::Mat nonMaxSuppressed = cv::Mat::zeros(gradientMagnitude.size(), CV_8U);
-
-    for (int y = 1; y < gradientMagnitude.rows - 1; ++y) {
-        for (int x = 1; x < gradientMagnitude.cols - 1; ++x) {
-            float direction = gradientDirection.at<float>(y, x);
-
-            float neighbor1, neighbor2;
-            if (direction < 0) {
-                neighbor1 = gradientMagnitude.at<float>(y + 1, x);
-                neighbor2 = gradientMagnitude.at<float>(y - 1, x);
-            }
-            else if (direction < 45) {
-                neighbor1 = gradientMagnitude.at<float>(y, x + 1);
-                neighbor2 = gradientMagnitude.at<float>(y, x - 1);
-            }
-            else if (direction < 90) {
-                neighbor1 = gradientMagnitude.at<float>(y - 1, x - 1);
-                neighbor2 = gradientMagnitude.at<float>(y + 1, x + 1);
-            }
-            else {
-                neighbor1 = gradientMagnitude.at<float>(y - 1, x + 1);
-                neighbor2 = gradientMagnitude.at<float>(y + 1, x - 1);
-            }
-
-            if (gradientMagnitude.at<float>(y, x) >= neighbor1 && gradientMagnitude.at<float>(y, x) >= neighbor2) {
-                nonMaxSuppressed.at<uchar>(y, x) = 255;
-            }
-        }
-    }
-
-    return nonMaxSuppressed;
-}
-
-cv::Mat detectObjects(cv::Mat inputImage, int kernelSize, double lowThreshold, double highThreshold) {
-    cv::Mat blurredImage;
-    cv::GaussianBlur(inputImage, blurredImage, cv::Size(kernelSize, kernelSize), 0);
-
-    cv::Mat grayscaleImage, gradientsX, gradientsY, gradientMagnitude, gradientDirection;
-    cv::cvtColor(blurredImage, grayscaleImage, cv::COLOR_BGR2GRAY);
-    cv::Sobel(grayscaleImage, gradientsX, CV_32F, 1, 0);
-    cv::Sobel(grayscaleImage, gradientsY, CV_32F, 0, 1);
-    cv::cartToPolar(gradientsX, gradientsY, gradientMagnitude, gradientDirection, true);
-
-    cv::Mat nonMaxSuppressed = nonMaximumSuppression(gradientMagnitude, gradientDirection);
-
-    cv::Mat thresholded;
-    cv::Canny(nonMaxSuppressed, thresholded, lowThreshold, highThreshold);
-
-    cv::Mat tracedEdges;
-    cv::Canny(inputImage, tracedEdges, lowThreshold, highThreshold);
-
-    return tracedEdges;
-}
-
-struct Circle {
-    int x, y, r;
-};
 
 float calculateIoU(cv::Rect box1, cv::Rect box2) {
     cv::Rect intersection = box1 & box2;
@@ -192,71 +154,57 @@ void evaluateDetection(const vector<Circle>& groundTruth, const vector<Circle>& 
     FP = std::count(detectedMatched.begin(), detectedMatched.end(), false);
 }
 
-void fillGroundTruthAndDetected(cv::Mat testImage, std::vector<Circle>& groundTruth, std::vector<Circle>& detected) {
-    int numCircles = 10;
-    for (int i = 0; i < numCircles; ++i) {
-        Circle circle;
-        circle.x = rand() % testImage.cols;
-        circle.y = rand() % testImage.rows;
-        circle.r = rand() % 30 + 10;
-        groundTruth.push_back(circle);
-    }
-
-    for (const auto& gt : groundTruth) {
-        detected.push_back(gt);
-    }
-
-    int numFalseDetections = 5;
-    for (int i = 0; i < numFalseDetections; ++i) {
-        Circle falseDetection;
-        falseDetection.x = rand() % testImage.cols;
-        falseDetection.y = rand() % testImage.rows;
-        falseDetection.r = rand() % 30 + 10;
-        detected.push_back(falseDetection);
-    }
-}
-
-
-void drawCircles(cv::Mat& image, const std::vector<Circle>& circles, cv::Scalar color) {
-    for (size_t i = 0; i < circles.size(); i++) {
-        cv::circle(image, cv::Point(circles[i].x, circles[i].y), circles[i].r, color, 2);
-    }
-}
-
 
 int main(int argc, const char* argv[]) {
-    cv::Mat testImage = generateTestImage(100, cv::Range(3, 7), cv::Range(25, 5), 15);
-
-    string outputFileName = "C:/Users/Svt/Desktop/khlobustova/prj.lab/lab04/test_image.png";
-    imwrite(outputFileName, testImage);
-
-
+    testImage = generateTestImage(100, cv::Range(3, 7), cv::Range(25, 5), 35);
+    cv::imshow("Test Image", testImage);
 
     cv::Mat thresholded = thresholdBinary(testImage, 100);
     cv::Mat adaptive = adaptiveBinary(testImage, 21, 10);
     cv::Mat otsu = otsuBinary(testImage);
-
-    cv::Mat detectedObjects = detectObjects(testImage, 5, 50, 150);
+    Mat ad;
     cv::imshow("Otsu Thresholded Image", otsu);
-
     tuneBinaryParameters(testImage);
+    imshow("test", testImage);
 
+    Mat gray;
+    cvtColor(testImage, gray, COLOR_BGR2GRAY);
+
+    Mat blurred;
+    GaussianBlur(gray, blurred, Size(5, 5), 0);
+
+    vector<Vec3f> circles;
+    vector<Circle> detected;
+    HoughCircles(gray, circles, HOUGH_GRADIENT, 1, gray.rows / 8, 200, 30, 0, 0);
+
+    Mat binary;
+    threshold(blurred, binary, 0, 255, THRESH_BINARY | THRESH_OTSU);
+
+    Mat morph;
+    Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(5, 5));
+    morphologyEx(binary, morph, MORPH_CLOSE, kernel);
+
+    vector<vector<Point>> contours;
+    findContours(morph, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+
+    Mat output = testImage.clone();
+    for (size_t i = 0; i < contours.size(); i++) {
+        drawContours(output, contours, (int)i, Scalar(0, 0, 255), 2);
+
+        Point2f center;
+        float radius;
+        minEnclosingCircle(contours[i], center, radius);
+
+        detected.push_back({ static_cast<int>(center.x), static_cast<int>(center.y), static_cast<int>(radius) });
+    }
+
+    imshow("Detected Contours", output);
 
     float qualityThreshold = 0.5;
-
-    std::vector<Circle> groundTruth;
-    std::vector<Circle> detected;
-
-    fillGroundTruthAndDetected(testImage, groundTruth, detected);
-
     int TP = 0, FP = 0, FN = 0;
 
     evaluateDetection(groundTruth, detected, qualityThreshold, TP, FP, FN);
-    drawCircles(testImage, detected, cv::Scalar(0, 0, 255));
     cv::imshow("Test Image", testImage);
-
-    cv::waitKey(100000);
-
 
     std::cout << "True Positives (TP): " << TP << std::endl;
     std::cout << "False Positives (FP): " << FP << std::endl;
@@ -264,5 +212,7 @@ int main(int argc, const char* argv[]) {
 
     float averageIoU = static_cast<float>(TP) / (TP + FN + FP);
     std::cout << "Average IoU: " << averageIoU << std::endl;
+
+    cv::waitKey(100000);
 
 }
