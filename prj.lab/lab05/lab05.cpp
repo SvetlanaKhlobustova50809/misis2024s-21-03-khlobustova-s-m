@@ -1,102 +1,75 @@
-#include <opencv2/opencv.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui.hpp>
 #include <iostream>
 #include <vector>
-#include <cmath>
+#include <numeric>
+#include <queue>
 
 using namespace cv;
 using namespace std;
 
-Mat generateTestImage(int side, int circleRadius, Scalar bgColor, Scalar circleColor) {
-    Mat testImage(side, side, CV_8UC1, bgColor);
-    circle(testImage, Point(side / 2, side / 2), circleRadius, circleColor, -1);
-    return testImage;
+Mat1f createPatternImage(int sideLength, int circleRadius, int bgColor, int fgColor) {
+    Mat1f patternImage(sideLength, sideLength, bgColor);
+    cv::Point centerPoint(sideLength / 2, sideLength / 2);
+    cv::circle(patternImage, centerPoint, circleRadius, fgColor, cv::FILLED);
+    return patternImage;
 }
 
-int main() {
-    int side = 99;
+Mat1f assembleTestImage(int black, int gray, int white) {
+    int sideLength = 99;
     int circleRadius = 25;
-    vector<Scalar> colors = { {0, 127},
-                              {127, 0},
-                              {255, 0},
-                              {255, 127},
-                              {0, 255},
-                              {127, 255} };
-    int rows = 2, cols = 3;
+    Mat1f finalImage;
+    vector<vector<Mat1f>> imageMatrix(2, vector<Mat1f>(3));
 
-    Mat combinedImages(rows * side, cols * side, CV_8UC1, Scalar(0));
+    imageMatrix[0][0] = createPatternImage(sideLength, circleRadius, black, white);
+    imageMatrix[0][1] = createPatternImage(sideLength, circleRadius, gray, black);
+    imageMatrix[0][2] = createPatternImage(sideLength, circleRadius, white, black);
+    imageMatrix[1][0] = createPatternImage(sideLength, circleRadius, white, gray);
+    imageMatrix[1][1] = createPatternImage(sideLength, circleRadius, black, white);
+    imageMatrix[1][2] = createPatternImage(sideLength, circleRadius, gray, white);
 
-    vector<Mat> testImages;
-    int index = 0;
-    int ind = 0;
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            Scalar bgColor = colors[ind][0];
-            Scalar circleColor = colors[ind][1];
-            Mat testImage = generateTestImage(side, circleRadius, bgColor, circleColor);
-            testImage.copyTo(combinedImages(Rect(j * side, i * side, side, side)));
-            testImages.push_back(testImage);
-            ind++;
+    vconcat(imageMatrix[0][0], imageMatrix[1][0], finalImage);
+    for (int i = 1; i < 3; i++) {
+        Mat1f tempConcat;
+        vconcat(imageMatrix[0][i], imageMatrix[1][i], tempConcat);
+        hconcat(finalImage, tempConcat, finalImage);
+    }
+    return finalImage;
+}
+
+int main(int argc, char* argv[]) {
+    Mat1f testPattern = assembleTestImage(0, 127, 255);
+    Mat core1 = (Mat_<float>(2, 2) << 1, 0, 0, -1);
+    Mat core2 = (Mat_<float>(2, 2) << 0, 1, -1, 0);
+    Mat1f filteredImage1, filteredImage2;
+    Mat1f combinedImage = testPattern.clone();
+
+    filter2D(testPattern, filteredImage1, -1, core1);
+    filter2D(testPattern, filteredImage2, -1, core2);
+
+    double minVal, maxVal;
+    minMaxLoc(filteredImage1, &minVal, &maxVal);
+    filteredImage1 = filteredImage1 * (255 / (maxVal - minVal)) + maxVal / 2;
+    minMaxLoc(filteredImage2, &minVal, &maxVal);
+    filteredImage2 = filteredImage2 * (255 / (maxVal - minVal)) + maxVal / 2;
+
+    for (int row = 0; row < testPattern.rows; row++) {
+        for (int col = 0; col < testPattern.cols; col++) {
+            combinedImage(row, col) = sqrt(pow(filteredImage1(row, col), 2) + pow(filteredImage2(row, col), 2));
         }
     }
+    vector<Mat1b> channels(3);
+    channels[0] = Mat1b(filteredImage1.clone());
+    channels[1] = Mat1b(filteredImage2.clone());
+    channels[2] = Mat1b(combinedImage.clone());
 
-    imshow("Test Images", combinedImages);
+    Mat colorResult;
+    merge(channels, colorResult);
 
-    Mat kernel1 = (Mat_<float>(2, 2) << 1, 0, 0, -1);
-    Mat kernel2 = (Mat_<float>(2, 2) << 0, 1, -1, 0);
-
-    vector<Mat> I1_images, I2_images;
-    for (const auto& img : testImages) {
-        Mat I1, I2;
-        filter2D(img, I1, CV_32F, kernel1);
-        filter2D(img, I2, CV_32F, kernel2);
-        I1_images.push_back(I1);
-        I2_images.push_back(I2);
-    }
-
-    Mat I1_combined(rows * side, cols * side, CV_32F, Scalar(0));
-    Mat I2_combined(rows * side, cols * side, CV_32F, Scalar(0));
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            int idx = i * cols + j;
-            I1_images[idx].copyTo(I1_combined(Rect(j * side, i * side, side, side)));
-            I2_images[idx].copyTo(I2_combined(Rect(j * side, i * side, side, side)));
-        }
-    }
-
-    imshow("I1 Images", I1_combined);
-    imshow("I2 Images", I2_combined);
-
-    vector<Mat> I3_images;
-    for (size_t i = 0; i < I1_images.size(); ++i) {
-        Mat I3;
-        magnitude(I1_images[i], I2_images[i], I3);
-        I3_images.push_back(I3);
-    }
-
-    Mat I3_combined(rows * side, cols * side, CV_32F, Scalar(0));
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            int idx = i * cols + j;
-            I3_images[idx].copyTo(I3_combined(Rect(j * side, i * side, side, side)));
-        }
-    }
-
-    imshow("I3 Images", I3_combined);
-
-    Mat visualized(rows * side, cols * side, CV_8UC3, Scalar(0, 0, 0));
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            int idx = i * cols + j;
-            vector<Mat> channels = { I1_images[idx], I2_images[idx], I3_images[idx] };
-            Mat merged;
-            merge(channels, merged);
-            merged.convertTo(merged, CV_8UC3);
-            merged.copyTo(visualized(Rect(j * side, i * side, side, side)));
-        }
-    }
-
-    imshow("Visualized Image", visualized);
-    waitKey(100000);
+    imshow("Test", testPattern);
+    imshow("Combined Result", colorResult);
+    waitKey(0);
 
     return 0;
 }
