@@ -22,14 +22,36 @@
 На изображении "Visualized Image" представлены результаты фильтрации в цвете, где каждый канал RGB соответствует одному из изображений I1, I2 и I3. Это позволяет визуально оценить распределение градиентов и их интенсивности.
 
 # Результат:
- 
+
+ <picture>
+  <img src="../../pictures/lab05_testPattern.jpg" width="550" height="360">
+</picture>
+
 Рис. 1 – Тестовое изображение
+
+<picture>
+  <img src="../../pictures/lab05_filteredImage1.jpg" width="550" height="360">
+</picture>
  
-Рис. 2 – l1 и l2 изображения
+Рис. 2 – l1 изображение
+
+<picture>
+  <img src="../../pictures/lab05_filteredImage2.jpg" width="550" height="360">
+</picture>
+
+Рис. 3 – l2 изображение
+
+<picture>
+  <img src="../../pictures/lab05_combinedImage.jpg" width="550" height="360">
+</picture>
  
-Рис. 3 – l3 изображение
+Рис. 4 – l3 изображение
+
+<picture>
+  <img src="../../pictures/lab05_colorResult.jpg" width="550" height="360">
+</picture>
  
-Рис. 4 – итоговое изображение
+Рис. 5 – итоговое изображение
 
 
 
