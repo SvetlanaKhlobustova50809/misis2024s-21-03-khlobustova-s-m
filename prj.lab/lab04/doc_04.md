@@ -55,7 +55,12 @@ detectObjects - функция для детектирования объект�
 True Positives (TP): 77
 False Positives (FP): 13
 False Negatives (FN): 23
-Average IoU: 0.681416
+Average IoU: 0.68
+
+True Positives (TP): 96
+False Positives (FP): 14
+False Negatives (FN): 4
+Average IoU: 0.84
 
 
 
