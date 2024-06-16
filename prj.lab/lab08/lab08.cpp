@@ -1,103 +1,126 @@
-#include <opencv2/opencv.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/imgproc.hpp>
 #include <iostream>
-#include <vector>
-#include <cmath>
+#include <fstream>
 
-using namespace cv;
 using namespace std;
+using namespace cv;
 
-// Функция для генерации изображения круга на фоне квадрата
-Mat generateTestImage(int side, int circleRadius, Scalar bgColor, Scalar circleColor) {
-    Mat testImage(side, side, CV_8UC1, bgColor);
-    circle(testImage, Point(side / 2, side / 2), circleRadius, circleColor, -1);
-    return testImage;
+Mat convertToLinearRGB(const Mat& img) {
+    Mat linearImg = img.clone();
+    linearImg.convertTo(linearImg, CV_64FC3);
+    normalize(linearImg, linearImg, 0, 1, NORM_MINMAX);
+
+    for (int i = 0; i < linearImg.rows; ++i) {
+        for (int j = 0; j < linearImg.cols; ++j) {
+            Vec3d& pixel = linearImg.at<Vec3d>(i, j); 
+
+            for (int c = 0; c < 3; ++c) {
+                double& color = pixel.val[c];
+
+                if (color <= 0.04045) {
+                    color /= 12.92;
+                }
+                else {
+                    color = pow((color + 0.055) / 1.055, 2.4);
+                }
+            }
+        }
+    }
+
+    return linearImg;
+}
+
+Point2f projectToPoint(const Vec3d& point, const Vec3d& basis1, const Vec3d& basis2) {
+    float x = static_cast<float>(point.dot(basis1));
+    float y = static_cast<float>(point.dot(basis2));
+    return Point2f(x, y);
+}
+
+Mat createProjectionHistogram(const vector<Point2f>& projectedPoints, const vector<Vec3b>& colors, int histWidth, int histHeight) {
+    Mat histogram(histHeight, histWidth, CV_8UC3, Scalar(255, 255, 255));
+
+    float minX = FLT_MAX, maxX = -FLT_MAX;
+    float minY = FLT_MAX, maxY = -FLT_MAX;
+
+    for (const auto& point : projectedPoints) {
+        minX = min(minX, point.x);
+        maxX = max(maxX, point.x);
+        minY = min(minY, point.y);
+        maxY = max(maxY, point.y);
+    }
+
+    for (size_t i = 0; i < projectedPoints.size(); i++) {
+        int x = cvRound(histWidth * (projectedPoints[i].x - minX) / (maxX - minX));
+        int y = cvRound(histHeight * (projectedPoints[i].y - minY) / (maxY - minY));
+        if (x >= 0 && x < histWidth && y >= 0 && y < histHeight) {
+            histogram.at<Vec3b>(histHeight - 1 - y, x) = colors[i];
+        }
+    }
+
+    return histogram;
 }
 
 int main() {
-    int side = 99;
-    int circleRadius = 25;
-    vector<Scalar> colors = { {0, 127},
-                              {127, 0},
-                              {255, 0},
-                              {255, 127},
-                              {0, 255},
-                              {127, 255} };
-    int rows = 2, cols = 3;
+    const Mat inputImage = imread("C:/Users/Svt/Desktop/ProcImage/pictures/lab03_test1.jpg", IMREAD_COLOR);
 
-    Mat combinedImages(rows * side, cols * side, CV_8UC1, Scalar(0));
+    if (inputImage.empty()) {
+        cout << "Could not open or find the image!" << endl;
+        return -1;
+    }
 
-    vector<Mat> testImages;
-    int index = 0;
-    int ind = 0;
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            Scalar bgColor = colors[ind][0];
-            Scalar circleColor = colors[ind][1];
-            Mat testImage = generateTestImage(side, circleRadius, bgColor, circleColor);
-            testImage.copyTo(combinedImages(Rect(j * side, i * side, side, side)));
-            testImages.push_back(testImage);
-            ind++;
+    Mat linearImage = convertToLinearRGB(inputImage);
+
+    Vec3d basis1(1, -1, 0);
+    Vec3d basis2(1, 1, -2);
+
+    vector<Point2f> projectedPoints;
+    vector<Vec3b> linearColors, originalColors;
+
+    for (int y = 0; y < linearImage.rows; ++y) {
+        for (int x = 0; x < linearImage.cols; ++x) {
+            Vec3d intensity = linearImage.at<Vec3d>(y, x);
+
+            Vec3d vector(intensity[0] - 0.5, intensity[1] - 0.5, intensity[2] - 0.5);
+
+            Point2f projectedPoint = projectToPoint(vector, basis1, basis2);
+
+            projectedPoints.push_back(projectedPoint);
+            linearColors.push_back(intensity);
+            originalColors.push_back(inputImage.at<Vec3b>(y, x));
         }
     }
 
-    imshow("Test Images", combinedImages);
+    int histWidth = 256;
+    int histHeight = 256;
 
-    Mat kernel1 = (Mat_<float>(2, 2) << 1, 0, 0, -1);
-    Mat kernel2 = (Mat_<float>(2, 2) << 0, 1, -1, 0);
+    Mat projectionHist = createProjectionHistogram(projectedPoints, originalColors, histWidth, histHeight);
+    Mat projectionHistLin = createProjectionHistogram(projectedPoints, linearColors, histWidth, histHeight);
 
-    vector<Mat> I1_images, I2_images;
-    for (const auto& img : testImages) {
-        Mat I1, I2;
-        filter2D(img, I1, CV_32F, kernel1);
-        filter2D(img, I2, CV_32F, kernel2);
-        I1_images.push_back(I1);
-        I2_images.push_back(I2);
+    namedWindow("Projection Histogram LinRGB", WINDOW_NORMAL);
+    imshow("Projection Histogram LinRGB", projectionHistLin);
+    imwrite("C:/Users/Svt/Desktop/ProcImage/pictures/lab08_hist1.png", projectionHistLin);
+
+    namedWindow("Projection Histogram", WINDOW_NORMAL);
+    imshow("Projection Histogram", projectionHist);
+    imwrite("C:/Users/Svt/Desktop/ProcImage/pictures/lab08_proj_hist1.png", projectionHist);
+
+    ofstream outFile("C:/Users/Svt/Desktop/ProcImage/pictures/lab08_projected_points_colors1.txt");
+    if (!outFile) {
+        cout << "Could not open file for writing!" << endl;
+        return -1;
     }
-
-    Mat I1_combined(rows * side, cols * side, CV_32F, Scalar(0));
-    Mat I2_combined(rows * side, cols * side, CV_32F, Scalar(0));
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            int idx = i * cols + j;
-            I1_images[idx].copyTo(I1_combined(Rect(j * side, i * side, side, side)));
-            I2_images[idx].copyTo(I2_combined(Rect(j * side, i * side, side, side)));
-        }
+    for (size_t i = 0; i < projectedPoints.size(); ++i) {
+        outFile << projectedPoints[i].x << " " << projectedPoints[i].y << " "
+            << static_cast<int>(linearColors[i][0]) << " "
+            << static_cast<int>(linearColors[i][1]) << " "
+            << static_cast<int>(linearColors[i][2]) << endl;
     }
+    outFile.close();
 
-    imshow("I1 Images", I1_combined);
-    imshow("I2 Images", I2_combined);
-
-    vector<Mat> I3_images;
-    for (size_t i = 0; i < I1_images.size(); ++i) {
-        Mat I3;
-        magnitude(I1_images[i], I2_images[i], I3);
-        I3_images.push_back(I3);
-    }
-
-    Mat I3_combined(rows * side, cols * side, CV_32F, Scalar(0));
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            int idx = i * cols + j;
-            I3_images[idx].copyTo(I3_combined(Rect(j * side, i * side, side, side)));
-        }
-    }
-
-    imshow("I3 Images", I3_combined);
-
-    Mat visualized(rows * side, cols * side, CV_8UC3, Scalar(0, 0, 0));
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            int idx = i * cols + j;
-            vector<Mat> channels = { I1_images[idx], I2_images[idx], I3_images[idx] };
-            Mat merged;
-            merge(channels, merged);
-            merged.convertTo(merged, CV_8UC3);
-            merged.copyTo(visualized(Rect(j * side, i * side, side, side)));
-        }
-    }
-
-    imshow("Visualized Image", visualized);
-    waitKey(100000);
+    waitKey(0);
+    destroyAllWindows();
 
     return 0;
 }
