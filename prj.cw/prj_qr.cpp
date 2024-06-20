@@ -17,52 +17,52 @@ vector<vector<Point>> srcContours;
 
 typedef struct
 {
-    string data;
-    vector<Point> location;
+	string data;
+	vector<Point> location;
 } decodedObject;
 
 
 Mat transformPerspective(Mat& im, vector<Point>& points)
 {
-    const int outputWidth = 200;
-    const int outputHeight = 200;
+	const int outputWidth = 200;
+	const int outputHeight = 200;
 
-    vector<Point2f> dstPoints = { Point2f(0, 0), Point2f(outputWidth - 1, 0), Point2f(outputWidth - 1, outputHeight - 1), Point2f(0, outputHeight - 1) };
+	vector<Point2f> dstPoints = { Point2f(0, 0), Point2f(outputWidth - 1, 0), Point2f(outputWidth - 1, outputHeight - 1), Point2f(0, outputHeight - 1) };
 
-    vector<Point2f> srcPoints;
-    for (const Point& pt : points)
-    {
-        srcPoints.push_back(Point2f(pt.x, pt.y));
-    }
+	vector<Point2f> srcPoints;
+	for (const Point& pt : points)
+	{
+		srcPoints.push_back(Point2f(pt.x, pt.y));
+	}
 
-    Mat transformMatrix = getPerspectiveTransform(srcPoints, dstPoints);
+	Mat transformMatrix = getPerspectiveTransform(srcPoints, dstPoints);
 
-    Mat transformed;
-    warpPerspective(im, transformed, transformMatrix, Size(outputWidth, outputHeight));
+	Mat transformed;
+	warpPerspective(im, transformed, transformMatrix, Size(outputWidth, outputHeight));
 
-    return transformed;
+	return transformed;
 }
 
 void display(Mat& im, vector<decodedObject>& decodedObjects)
 {
-    for (int i = 0; i < decodedObjects.size(); i++)
-    {
-        vector<Point> points = decodedObjects[i].location;
+	for (int i = 0; i < decodedObjects.size(); i++)
+	{
+		vector<Point> points = decodedObjects[i].location;
 		srcContours.push_back(decodedObjects[i].location);
-        vector<Point> hull;
+		vector<Point> hull;
 
-        if (points.size() > 4)
-            convexHull(points, hull);
-        else
-            hull = points;
+		if (points.size() > 4)
+			convexHull(points, hull);
+		else
+			hull = points;
 
-        int n = hull.size();
+		int n = hull.size();
 
-        for (int j = 0; j < n; j++)
-        {
-            line(im, hull[j], hull[(j + 1) % n], Scalar(255, 0, 0), 5);
-        }
-    }
+		for (int j = 0; j < n; j++)
+		{
+			line(im, hull[j], hull[(j + 1) % n], Scalar(255, 0, 0), 5);
+		}
+	}
 
 }
 
@@ -76,6 +76,7 @@ void Find_QR_Rect(Mat src, vector<Mat>& ROI_Rect, vector<decodedObject>& decoded
 
 	Mat bin;
 	threshold(blur, bin, 0, 255, THRESH_BINARY_INV | THRESH_OTSU);
+	imwrite("C:/Users/Svt/Desktop/khlobustova/prj.cw/input/bin1.png", bin);
 
 	Mat kernel = getStructuringElement(MORPH_RECT, Size(5, 1));
 	Mat open;
@@ -84,6 +85,7 @@ void Find_QR_Rect(Mat src, vector<Mat>& ROI_Rect, vector<decodedObject>& decoded
 	Mat kernel1 = getStructuringElement(MORPH_RECT, Size(21, 1));
 	Mat close;
 	morphologyEx(open, close, MORPH_CLOSE, kernel1);
+	imwrite("C:/Users/Svt/Desktop/khlobustova/prj.cw/input/kernel1.png", close);
 
 	vector<vector<Point>>MaxContours;
 	findContours(close, MaxContours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
@@ -115,7 +117,7 @@ void Find_QR_Rect(Mat src, vector<Mat>& ROI_Rect, vector<decodedObject>& decoded
 			}
 		}
 	}
-	if (f){
+	if (f) {
 		Mat edges;
 		Canny(gray, edges, 100, 200);
 
@@ -210,9 +212,62 @@ int Dectect_QR_Rect(Mat src, Mat& canvas, vector<Mat>& ROI_Rect)
 	return QR_Rect.size();
 }
 
-void evaluateQuality(const Mat& src, const Mat& layout) {
+vector<string> readFile(const string& filename) {
+	ifstream file(filename);
+	vector<string> lines;
+	string line;
+	while (getline(file, line)) {
+		lines.push_back(line);
+	}
+	file.close();
+	return lines;
+}
 
-	Mat hsv;
+vector<vector<Point>> parseFile(const string& filename, int val) {
+	vector<vector<Point>> layoutContours;
+	ifstream file(filename);
+	string line;
+	vector<Point> points;
+	int cou = 0;
+
+	while (getline(file, line)) {
+		// Удаление пробелов и символов ; [ ]
+		line.erase(remove_if(line.begin(), line.end(), [](char c) { return isspace(c) || c == '[' || c == ']' || c == ';'; }), line.end());
+		
+		// Разделение строки на координаты
+		if (!line.empty()) {
+			stringstream pointStream(line);
+			string coord;
+			vector<int> coords;
+
+			while (getline(pointStream, coord, ',')) {
+				coords.push_back(stoi(coord));
+				if (coords.size() == 2) {
+					points.push_back(Point(coords[0], coords[1]));
+					cou++;
+					if ((val == 4) && (cou == val)) {
+						layoutContours.push_back(points);
+						points.clear();
+						cou = 0;
+					}
+				}
+			}
+		}
+	}
+	if (val == 1) {
+		layoutContours.push_back(points);
+		points.clear();
+	}
+
+	//for (auto i : layoutContours)
+	//	cout << i << endl;
+
+	return layoutContours;
+}
+
+void evaluateQuality(const Mat& src, string latoutPath) {
+
+	/*Mat hsv;
 	cvtColor(layout, hsv, COLOR_BGR2HSV);
 
 	Scalar lowerRed1(0, 100, 100);
@@ -227,16 +282,20 @@ void evaluateQuality(const Mat& src, const Mat& layout) {
 
 	redMask = redMask1 | redMask2;
 
-	vector<vector<Point>> layoutContours;
-	findContours(redMask, layoutContours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+	vector<vector<Point>> layoutContours2;
+	findContours(redMask, layoutContours2, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);*/
+	//for (auto i : layoutContours2)
+	//	cout << i << endl;
 
-	//Mat result = src.clone();
-	//drawContours(result, layoutContours, -1, Scalar(0, 0, 255), 2);
 
-	//imshow("Red Contours", result);
-	
+	long long val = 4;
+	if (srcContours.size() == 1)
+		val = 1;
 
-	int TP = 0, FP = 0, FN = 0;
+
+	vector<vector<Point>> layoutContours = parseFile(latoutPath, val);
+
+	double TP = 0, FP = 0, FN = 0;
 
 	vector<bool> srcMatched(srcContours.size(), false);
 	vector<bool> layoutMatched(layoutContours.size(), false);
@@ -269,25 +328,22 @@ void evaluateQuality(const Mat& src, const Mat& layout) {
 		}
 	}
 
+	//Rect rect1 = boundingRect(layoutContours[0]);
+	//Rect rect2 = boundingRect(srcContours[0]);
+	//Rect intersection = rect1 & rect2;
+	//double intersectionArea = intersection.area();
+	//double unionArea = rect1.area() + rect2.area() - intersectionArea;
+	//cout << (unionArea > 0) ? (intersectionArea / unionArea) : 0;
+
 	cout << "True Positives (TP): " << TP << endl;
 	cout << "False Positives (FP): " << FP << endl;
 	cout << "False Negatives (FN): " << FN << endl;
-}
 
-
-vector<string> readFile(const string& filename) {
-	ifstream file(filename);
-	vector<string> lines;
-	string line;
-	while (getline(file, line)) {
-		lines.push_back(line);
-	}
-	file.close();
-	return lines;
+	std::cout << "Average IoU: " << (TP) / (TP + FN + FP) << std::endl;
 }
 
 void calculateQualityMetrics(const vector<string>& src, const vector<string>& layout) {
-	int TP = 0, FP = 0, FN = 0;
+	double TP = 0, FP = 0, FN = 0;
 
 	vector<string> sortedSrc = src;
 	vector<string> sortedLayout = layout;
@@ -319,17 +375,19 @@ void calculateQualityMetrics(const vector<string>& src, const vector<string>& la
 	cout << "True Positives (TP): " << TP << endl;
 	cout << "False Positives (FP): " << FP << endl;
 	cout << "False Negatives (FN): " << FN << endl;
+	cout << "Quality assessment: " << (TP) / (sortedLayout.size()) << endl;
 }
 
 
-int main(int argc, char* argv[]){
+int main(int argc, char* argv[]) {
+	//string base = "C:/Users/Svt/Desktop/khlobustova/prj.cw";
 	string base = ".";
 	string test, src, layout, src_data, layout_data;
-	test = "/input/test2.png";
-	src = "/output/src2.png";
-	layout = "/output/layout2.png";
-	src_data = "/output/src_data2.txt";
-	layout_data = "/output/layout_data2.txt";
+	test = "/input/test1.png";
+	src = "/output/src1.png";
+	layout = "/input/input_layout1.txt";
+	src_data = "/output/src_data1.txt";
+	layout_data = "/input/layout_data1.txt";
 
 	if (argc > 1) {
 		test = argv[1];
@@ -414,7 +472,7 @@ int main(int argc, char* argv[]){
 
 	if (out.is_open())
 	{
-		for (string links: data_links)
+		for (string links : data_links)
 			out << links << std::endl;
 	}
 	out.close();
@@ -422,16 +480,7 @@ int main(int argc, char* argv[]){
 	imshow("source", source);
 	cv::imwrite(outputAns, source);
 
-	string annotatedImagePath = base+layout;
-
-	Mat annotatedImage = imread(annotatedImagePath);
-
-	if (annotatedImage.empty()) {
-		std::cout << "Error loading images!" << endl;
-		return -1;
-	}
-
-	evaluateQuality(source, annotatedImage);
+	evaluateQuality(source, base + layout);
 
 	string srcFile = base + src_data;
 	string layoutFile = base + layout_data;
@@ -441,9 +490,13 @@ int main(int argc, char* argv[]){
 
 	calculateQualityMetrics(srcData, layoutData);
 
+	//for (auto i : srcContours)
+	//	cout << i << endl;
+
 	cv::waitKey(0);
 	cv::destroyAllWindows();
 	std::system("pause");
 
 	return 0;
 }
+
