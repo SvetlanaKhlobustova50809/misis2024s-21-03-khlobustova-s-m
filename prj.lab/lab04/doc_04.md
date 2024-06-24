@@ -39,39 +39,40 @@ tuneBinaryParameters - функция для визуальной настрой
 -	Применение порога в зависимости от метода threshold или adaptiveThreshold.
 
 # Результаты
- 
+
+<picture>
+  <img src="../../pictures/lab04_test1.png" width="550" height="550">
+</picture>
+
 Рис. 1 – Тестовое изображение 1 c параметрами: 
 generateTestImage(100, cv::Range(3, 7), cv::Range(25, 5), 35)
 и бинаризацией - threshold(image, image, 20, 100, cv::THRESH_BINARY);
 
 <picture>
-  <img src="../../pictures/lab04_test1.png" width="550" height="550">
-</picture>
- 
-Рис. 2 – Детектированное изображение 1
-
-<picture>
   <img src="../../pictures/lab04_res1.png" width="550" height="550">
 </picture>
-  
-Рис. 3 – Тестовое изображение 2 c параметрами: 
-generateTestImage(100, cv::Range(3, 7), cv::Range(25, 5), 15)
+
+Рис. 2 – Детектированное изображение 1
 
 <picture>
   <img src="../../pictures/lab04_test2.png" width="550" height="550">
 </picture>
- 
-Рис. 4 – Детектированное изображение 1
+
+Рис. 3 – Тестовое изображение 2 c параметрами: 
+generateTestImage(100, cv::Range(3, 7), cv::Range(25, 5), 15)
 
 <picture>
   <img src="../../pictures/lab04_res2.png" width="550" height="550">
 </picture>
 
-Рис. 5 – Визуальная настройка параметров бинаризации - пороговая, адаптивная и бинаризация методом Отцу
+ 
+Рис. 4 – Детектированное изображение 1
 
 <picture>
   <img src="../../pictures/visual.png" width="1700" height="450">
 </picture>
+
+Рис. 5 – Визуальная настройка параметров бинаризации - пороговая, адаптивная и бинаризация методом Отцу
 
 # Таблица по оценке качества
 
