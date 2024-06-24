@@ -10,17 +10,24 @@ Mat autoContrastSingleChannel(Mat img) {
         img.convertTo(img, CV_8U);
     }
 
+    // Создание объекта CLAHE
+    Ptr<CLAHE> clahe = createCLAHE();
+    clahe->setClipLimit(4.0); // Установка ограничения контраста
+
+    Mat claheResult;
+    clahe->apply(img, claheResult);
+
     Mat hist;
     int histSize = 256;
     float range[] = { 0, 256 };
     const float* histRange = { range };
     bool uniform = true, accumulate = false;
 
-    calcHist(&img, 1, 0, Mat(), hist, 1, &histSize, &histRange, uniform, accumulate);
+    calcHist(&claheResult, 1, 0, Mat(), hist, 1, &histSize, &histRange, uniform, accumulate);
 
     float alpha = 0.15, beta = 0.0001;
     float sum = 0;
-    int totalPixels = img.rows * img.cols;
+    int totalPixels = claheResult.rows * claheResult.cols;
     int blackThreshold = 0, whiteThreshold = 255;
 
     for (int i = 0; i < histSize; i++) {
