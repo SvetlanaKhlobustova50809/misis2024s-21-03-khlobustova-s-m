@@ -21,7 +21,7 @@
 # Результат:
 
 <picture>
-  <img src="../../pictures/lab04_test2.png" width="550" height="550">
+  <img src="../../lab07_test_image.png" width="550" height="550">
 </picture>
    
 Рис. 1 – Тестовое изображение 1
@@ -72,7 +72,7 @@
 
 |Number of detection|True Positives|False Positives|False Negatives|Average IoU|
 |-|-|--------|---|-|
-|1|88|12|12|0.78|
+|1|80|19|20|0.67|
 |2|79|12|21|0.71|
 |3|100|0|0|1|
 
