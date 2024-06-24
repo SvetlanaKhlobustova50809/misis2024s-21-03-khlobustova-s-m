@@ -26,8 +26,42 @@ Mat applyGrayWorld(const Mat& src) {
     return dst;
 }
 
+double calculateMSE(const Mat& src1, const Mat& src2) {
+    Mat s1;
+    absdiff(src1, src2, s1);       // |src1 - src2|
+    s1.convertTo(s1, CV_32F);  // convert to float
+    s1 = s1.mul(s1);           // |src1 - src2|^2
+
+    Scalar s = sum(s1);        // sum elements per channel
+
+    double mse = (s[0] + s[1] + s[2]) / (double)(src1.channels() * src1.total());
+    return mse;
+}
+
+double calculateColorfulnessIndex(const Mat& src) {
+    Mat lab_image;
+    cvtColor(src, lab_image, COLOR_BGR2Lab);
+
+    Scalar meanLab, stddevLab;
+    meanStdDev(lab_image, meanLab, stddevLab);
+
+    double colorfulness = sqrt(stddevLab[1] * stddevLab[1] + stddevLab[2] * stddevLab[2]) + 0.3 * sqrt(meanLab[1] * meanLab[1] + meanLab[2] * meanLab[2]);
+
+    return colorfulness;
+}
+
+void measureQuality(const Mat& srcImage, const Mat& balancedImage) {
+    double originalColorfulness = calculateColorfulnessIndex(srcImage);
+    double balancedColorfulness = calculateColorfulnessIndex(balancedImage);
+    double mse = calculateMSE(srcImage, balancedImage);
+
+    cout << "Original Image Colorfulness Index: " << originalColorfulness << endl;
+    cout << "Balanced Image Colorfulness Index: " << balancedColorfulness << endl;
+    cout << "Mean Squared Error (MSE): " << mse << endl;
+}
+
 int main() {
-    Mat srcImage = imread("C:/Users/Svt/Desktop/ProcImage/pictures/lab03_test2.jpg", IMREAD_COLOR);
+    Mat srcImage = imread("C:/Users/Svt/Desktop/ProcImage/pictures/lab03_test1.jpg", IMREAD_COLOR);
     if (srcImage.empty()) {
         cout << "Could not open or find the image!" << endl;
         return -1;
@@ -37,7 +71,9 @@ int main() {
 
     imshow("Original Image", srcImage);
     imshow("Gray World Balanced Image", balancedImage);
-    imwrite("C:/Users/Svt/Desktop/ProcImage/pictures/lab09_gray_world_balanced.jpg", balancedImage);
+    imwrite("C:/Users/Svt/Desktop/ProcImage/pictures/lab09_gray_world_balanced1.jpg", balancedImage);
+
+    measureQuality(srcImage, balancedImage);
 
     waitKey(0);
     destroyAllWindows();
